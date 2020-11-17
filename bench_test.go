@@ -7,6 +7,7 @@ import (
 
 	"github.com/bool64/httptestbench"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/valyala/fasthttp"
 )
 
@@ -16,8 +17,8 @@ func TestRoundTrip_helloWorld(t *testing.T) {
 	if httptestbench.RaceDetectorEnabled {
 		assert.Less(t, res.Extra["B:rcvd/op"], 130.0)
 		assert.Less(t, res.Extra["B:sent/op"], 64.0)
-		assert.Less(t, res.AllocsPerOp(), int64(25))
-		assert.Less(t, res.AllocedBytesPerOp(), int64(5000))
+		assert.Less(t, res.AllocsPerOp(), int64(27))
+		assert.Less(t, res.AllocedBytesPerOp(), int64(6000))
 	} else {
 		assert.Less(t, res.Extra["B:rcvd/op"], 130.0)
 		assert.Less(t, res.Extra["B:sent/op"], 64.0)
@@ -33,7 +34,7 @@ func TestRoundTrip_helloWorld_fast(t *testing.T) {
 		assert.Less(t, res.Extra["B:rcvd/op"], 148.0)
 		assert.Less(t, res.Extra["B:sent/op"], 64.0)
 		assert.Less(t, res.AllocsPerOp(), int64(10))
-		assert.Less(t, res.AllocedBytesPerOp(), int64(2700))
+		assert.Less(t, res.AllocedBytesPerOp(), int64(4000))
 	} else {
 		assert.Less(t, res.Extra["B:rcvd/op"], 148.0)
 		assert.Less(t, res.Extra["B:sent/op"], 64.0)
@@ -79,4 +80,31 @@ func Benchmark_helloWorld(b *testing.B) {
 			return resp.StatusCode() == http.StatusOK
 		},
 	)
+}
+
+func BenchmarkServeHTTP(b *testing.B) {
+	h := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusAccepted)
+	})
+
+	req, err := http.NewRequest(http.MethodGet, "/", nil)
+	require.NoError(b, err)
+
+	httptestbench.ServeHTTP(b, 50, h, func(i int) *http.Request {
+		return req
+	}, func(i int, resp *httptest.ResponseRecorder) bool {
+		return resp.Code == http.StatusAccepted
+	})
+}
+
+func TestServeHTTP(t *testing.T) {
+	res := testing.Benchmark(BenchmarkServeHTTP)
+
+	if httptestbench.RaceDetectorEnabled {
+		assert.Equal(t, res.AllocsPerOp(), int64(4))
+		assert.Less(t, res.AllocedBytesPerOp(), int64(300))
+	} else {
+		assert.Equal(t, res.AllocsPerOp(), int64(4))
+		assert.Less(t, res.AllocedBytesPerOp(), int64(250))
+	}
 }

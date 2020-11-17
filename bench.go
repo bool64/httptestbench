@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -66,6 +68,19 @@ func (c *countingDialer) Close() {
 	c.conns = nil
 }
 
+var (
+	dialer = countingDialer{
+		dial: (&fasthttp.TCPDialer{Concurrency: 1000}).Dial,
+	}
+
+	client = fasthttp.Client{
+		Dial:                          dialer.Dial,
+		DisableHeaderNamesNormalizing: true,
+		DisablePathNormalizing:        true,
+		MaxIdleConnDuration:           time.Second / 10,
+	}
+)
+
 // RoundTrip sends b.N requests concurrently and asserts valid response.
 func RoundTrip(
 	b *testing.B,
@@ -75,12 +90,8 @@ func RoundTrip(
 ) {
 	b.Helper()
 
-	dialer := countingDialer{
-		dial: (&fasthttp.TCPDialer{Concurrency: 1000}).Dial,
-	}
-	defer dialer.Close()
-
-	client := fasthttp.Client{Dial: dialer.Dial}
+	atomic.StoreUint64(&dialer.rcvd, 0)
+	atomic.StoreUint64(&dialer.sent, 0)
 
 	concurrentBench(b, concurrency, func(i int) {
 		req := fasthttp.AcquireRequest()
@@ -102,8 +113,10 @@ func RoundTrip(
 		}
 	})
 
-	b.ReportMetric(float64(dialer.sent)/float64(b.N), "B:sent/op")
-	b.ReportMetric(float64(dialer.rcvd)/float64(b.N), "B:rcvd/op")
+	b.ReportMetric(float64(atomic.LoadUint64(&dialer.sent))/float64(b.N), "B:sent/op")
+	b.ReportMetric(float64(atomic.LoadUint64(&dialer.rcvd))/float64(b.N), "B:rcvd/op")
+
+	client.CloseIdleConnections()
 }
 
 func concurrentBench(b *testing.B, concurrency int, iterate func(i int)) {
@@ -141,4 +154,26 @@ func concurrentBench(b *testing.B, concurrency int, iterate func(i int)) {
 func failIteration(i int, code int, body []byte) {
 	panic(fmt.Sprintf("iteration: %d, unexpected result status: %d, body: %q",
 		i, code, string(body)))
+}
+
+// ServeHTTP serves b.N requests with http.Handler concurrently and asserts valid response.
+func ServeHTTP(
+	b *testing.B,
+	concurrency int,
+	h http.Handler,
+	makeRequest func(i int) *http.Request,
+	responseIsValid func(i int, resp *httptest.ResponseRecorder) bool,
+) {
+	b.Helper()
+
+	concurrentBench(b, concurrency, func(i int) {
+		req := makeRequest(i)
+		rw := httptest.NewRecorder()
+
+		h.ServeHTTP(rw, req)
+
+		if !responseIsValid(i, rw) {
+			failIteration(i, rw.Code, rw.Body.Bytes())
+		}
+	})
 }
