@@ -22,8 +22,8 @@ func TestRoundTrip_helloWorld(t *testing.T) {
 	} else {
 		assert.Less(t, res.Extra["B:rcvd/op"], 130.0)
 		assert.Less(t, res.Extra["B:sent/op"], 64.0)
-		assert.Less(t, res.AllocsPerOp(), int64(16))
-		assert.Less(t, res.AllocedBytesPerOp(), int64(1500))
+		assert.Less(t, res.AllocsPerOp(), int64(18))
+		assert.Less(t, res.AllocedBytesPerOp(), int64(1600))
 	}
 }
 
@@ -38,8 +38,8 @@ func TestRoundTrip_helloWorld_fast(t *testing.T) {
 	} else {
 		assert.Less(t, res.Extra["B:rcvd/op"], 148.0)
 		assert.Less(t, res.Extra["B:sent/op"], 64.0)
-		assert.Equal(t, res.AllocsPerOp(), int64(0))
-		assert.Less(t, res.AllocedBytesPerOp(), int64(17))
+		assert.Equal(t, res.AllocsPerOp(), int64(1))
+		assert.Less(t, res.AllocedBytesPerOp(), int64(40))
 	}
 }
 
@@ -101,10 +101,10 @@ func TestServeHTTP(t *testing.T) {
 	res := testing.Benchmark(BenchmarkServeHTTP)
 
 	if httptestbench.RaceDetectorEnabled {
-		assert.Equal(t, res.AllocsPerOp(), int64(4))
+		assert.LessOrEqual(t, res.AllocsPerOp(), int64(5))
 		assert.Less(t, res.AllocedBytesPerOp(), int64(300))
 	} else {
-		assert.Equal(t, res.AllocsPerOp(), int64(4))
+		assert.LessOrEqual(t, res.AllocsPerOp(), int64(5))
 		assert.Less(t, res.AllocedBytesPerOp(), int64(250))
 	}
 }
