@@ -120,6 +120,8 @@ func RoundTrip(
 }
 
 func concurrentBench(b *testing.B, concurrency int, iterate func(i int)) {
+	b.Helper()
+
 	semaphore := make(chan bool, concurrency)
 	start := time.Now()
 

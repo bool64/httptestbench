@@ -1,2 +1,5 @@
-/unit.coverprofile
 /.idea
+/*.coverprofile
+/.vscode
+/bench-*.txt
+/vendor
