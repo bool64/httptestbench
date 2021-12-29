@@ -101,10 +101,10 @@ func TestServeHTTP(t *testing.T) {
 	res := testing.Benchmark(BenchmarkServeHTTP)
 
 	if httptestbench.RaceDetectorEnabled {
-		assert.Equal(t, int64(5), res.AllocsPerOp())
+		assert.LessOrEqual(t, res.AllocsPerOp(), int64(5))
 		assert.Less(t, res.AllocedBytesPerOp(), int64(300))
 	} else {
-		assert.Equal(t, int64(5), res.AllocsPerOp())
+		assert.LessOrEqual(t, res.AllocsPerOp(), int64(5))
 		assert.Less(t, res.AllocedBytesPerOp(), int64(250))
 	}
 }
