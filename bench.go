@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/valyala/fasthttp"
+	"github.com/vearutop/dynhist-go"
 )
 
 type countingDialer struct {
@@ -68,19 +69,6 @@ func (c *countingDialer) Close() {
 	c.conns = nil
 }
 
-var (
-	dialer = countingDialer{
-		dial: (&fasthttp.TCPDialer{Concurrency: 1000}).Dial,
-	}
-
-	client = fasthttp.Client{
-		Dial:                          dialer.Dial,
-		DisableHeaderNamesNormalizing: true,
-		DisablePathNormalizing:        true,
-		MaxIdleConnDuration:           time.Second / 10,
-	}
-)
-
 // RoundTrip sends b.N requests concurrently and asserts valid response.
 func RoundTrip(
 	b *testing.B,
@@ -90,8 +78,24 @@ func RoundTrip(
 ) {
 	b.Helper()
 
+	dialer := countingDialer{
+		dial: (&fasthttp.TCPDialer{Concurrency: 1000}).Dial,
+	}
+
+	client := fasthttp.Client{
+		Dial:                          dialer.Dial,
+		DisableHeaderNamesNormalizing: true,
+		DisablePathNormalizing:        true,
+		MaxIdleConnDuration:           time.Second / 10,
+	}
+
 	atomic.StoreUint64(&dialer.rcvd, 0)
 	atomic.StoreUint64(&dialer.sent, 0)
+
+	hist := dynhist.Collector{
+		BucketsLimit: 50,
+		WeightFunc:   dynhist.ExpWidth(1.2, 0.9),
+	}
 
 	concurrentBench(b, concurrency, func(i int) {
 		req := fasthttp.AcquireRequest()
@@ -103,10 +107,12 @@ func RoundTrip(
 
 		setupRequest(i, req)
 
+		start := time.Now()
 		err := client.Do(req, resp)
 		if err != nil {
 			b.Fatal(err.Error())
 		}
+		hist.Add(time.Since(start).Seconds() * 1000)
 
 		if !responseIsValid(i, resp) {
 			failIteration(i, resp.StatusCode(), resp.Body())
@@ -115,6 +121,10 @@ func RoundTrip(
 
 	b.ReportMetric(float64(atomic.LoadUint64(&dialer.sent))/float64(b.N), "B:sent/op")
 	b.ReportMetric(float64(atomic.LoadUint64(&dialer.rcvd))/float64(b.N), "B:rcvd/op")
+	b.ReportMetric(hist.Percentile(99.9), "99.9%:ms")
+	b.ReportMetric(hist.Percentile(99), "99%:ms")
+	b.ReportMetric(hist.Percentile(90), "90%:ms")
+	b.ReportMetric(hist.Percentile(50), "50%:ms")
 
 	client.CloseIdleConnections()
 }

@@ -8,10 +8,10 @@
 
 This module provides benchmark helper to send concurrent http requests and assert responses.
 
-It adds custom metrics to benchmark result:
- * `B:rcvd/op` bytes received by HTTP client per request,
- * `B:sent/op` bytes sent by HTTP client per response,
- * `rps` requests per second rate.
+There are a few custom metrics added to benchmark result:
+* `50%:ms`, `90%:ms`, `99%:ms`, `99.9%:ms` are percentile values of round trip latency in milliseconds,
+* `B:rcvd/op` and `B:sent/op` are average bytes received and sent per request,
+* `rps` is requests per second rate.
 
 The client is using [`github.com/valyala/fasthttp`](https://github.com/valyala/fasthttp) for better performance 
 and lower impact on benchmark results.
@@ -42,7 +42,7 @@ func Benchmark_helloWorld(b *testing.B) {
 Sample result:
 
 ```
-Benchmark_helloWorld-4   	   61722	     18259 ns/op	       129 B:rcvd/op	        63.0 B:sent/op	     54766 rps	    1462 B/op	      15 allocs/op
+Benchmark_helloWorld-12    	  142648	      8230 ns/op	         0.3469 50%:ms	         0.6917 90%:ms	         1.428 99%:ms	         2.721 99.9%:ms	       129.0 B:rcvd/op	        63.00 B:sent/op	    121496 rps	    1551 B/op	      17 allocs/op
 ```
 
 Performance expectations can also be locked with a test: 
