@@ -97,7 +97,7 @@ func Benchmark_zeroPort(b *testing.B) {
 	})}
 
 	go func() {
-		require.NoError(b, srv.Serve(listener))
+		_ = srv.Serve(listener) // nolint:errcheck
 	}()
 
 	defer func() {
