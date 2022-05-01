@@ -1,8 +1,10 @@
 package httptestbench_test
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/bool64/httptestbench"
@@ -75,6 +77,39 @@ func Benchmark_helloWorld(b *testing.B) {
 	httptestbench.RoundTrip(b, 50,
 		func(i int, req *fasthttp.Request) {
 			req.SetRequestURI(srv.URL)
+		},
+		func(i int, resp *fasthttp.Response) bool {
+			return resp.StatusCode() == http.StatusOK
+		},
+	)
+}
+
+func Benchmark_zeroPort(b *testing.B) {
+	listener, err := net.Listen("tcp", ":0") // nolint:gosec
+	require.NoError(b, err)
+
+	// Initialize HTTP server.
+	srv := http.Server{Handler: http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		_, err := writer.Write([]byte("Hello World!"))
+		if err != nil {
+			b.Fatal(err)
+		}
+	})}
+
+	go func() {
+		require.NoError(b, srv.Serve(listener))
+	}()
+
+	defer func() {
+		require.NoError(b, srv.Close())
+	}()
+
+	baseURL := "http://" + listener.Addr().String() + "/"
+	baseURL = strings.Replace(baseURL, "[::]", "127.0.0.1", 1)
+
+	httptestbench.RoundTrip(b, 50,
+		func(i int, req *fasthttp.Request) {
+			req.SetRequestURI(baseURL)
 		},
 		func(i int, resp *fasthttp.Response) bool {
 			return resp.StatusCode() == http.StatusOK
